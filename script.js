@@ -1,11 +1,12 @@
 (function () {
-  // -------- Simple auth guard (main page) --------
+  // =========================
+  //  SIMPLE AUTH GUARD
+  // =========================
   try {
     const rawUser = localStorage.getItem("lexis_user");
     if (!rawUser) {
-      // no user stored → send to login page
       window.location.replace("/login/");
-      return; // stop running the dashboard JS
+      return; // stop running dashboard JS
     }
   } catch (err) {
     window.location.replace("/login/");
@@ -30,8 +31,8 @@
   // =========================
   //  GROQ CONFIG
   // =========================
-  // Loaded from config.local.js in local dev.
-  // In production (Vercel) this object doesn't exist, so Groq is disabled.
+  // In local dev, config.local.js can define:
+  // window.LEXIS_GROQ_CONFIG = { apiKey: "...", model: "..." }
   const GROQ_API_KEY =
     (window.LEXIS_GROQ_CONFIG && window.LEXIS_GROQ_CONFIG.apiKey) || "";
   const GROQ_MODEL =
@@ -41,7 +42,6 @@
   const GROQ_ENABLED =
     !!GROQ_API_KEY && !GROQ_API_KEY.startsWith("YOUR_") && !!GROQ_MODEL;
 
-  // Chat bubble open/closed
   let isChatOpen = false;
 
   // =========================
@@ -259,7 +259,6 @@
       quiz.push({
         question: "Fill in the blank: " + question,
         answer: cleanWord,
-        // no options in local fallback
       });
     }
 
@@ -509,7 +508,6 @@ Transcript:
       lesson.transcript = text.trim();
       saveLessons();
 
-      // live notes/summary update
       scheduleLiveUpdate();
 
       if (activeTab === "transcript") renderMain();
@@ -559,6 +557,7 @@ Transcript:
   async function generateArtifactsForCurrentLesson() {
     const lesson = getCurrentLesson();
     if (!lesson) return;
+
     const text = (lesson.transcript || "").trim();
     if (!text) {
       alert(
@@ -569,45 +568,57 @@ Transcript:
       return;
     }
 
-    const localNotes = generateNotesFromTranscript(text);
-    const localSummary = generateSummaryFromTranscript(text);
-    const localMindmap = generateMindmapFromTranscript(text);
-    const localQuiz = generateQuizFromTranscript(text);
-    const localFlashcards = generateFlashcardsFromTranscript(text);
-
-    lesson.notes =
-      localNotes + (GROQ_ENABLED ? "\n\n(Enhancing with Groq…)" : "");
-    lesson.summary = localSummary;
-    lesson.mindmap = localMindmap;
-    lesson.quiz = localQuiz;
-    lesson.flashcards = localFlashcards;
-
-    saveLessons();
-    renderMain();
-
-    if (!GROQ_ENABLED) {
-      isProcessing = false;
-      renderMain();
-      return;
-    }
-
     try {
+      console.log(
+        "[Lexis] Generating study materials from transcript, length =",
+        text.length
+      );
+
+      // 1) ALWAYS generate local artifacts first
+      const localNotes = generateNotesFromTranscript(text);
+      const localSummary = generateSummaryFromTranscript(text);
+      const localMindmap = generateMindmapFromTranscript(text);
+      const localQuiz = generateQuizFromTranscript(text);
+      const localFlashcards = generateFlashcardsFromTranscript(text);
+
+      lesson.notes = localNotes;
+      lesson.summary = localSummary;
+      lesson.mindmap = localMindmap;
+      lesson.quiz = localQuiz;
+      lesson.flashcards = localFlashcards;
+
+      saveLessons();
+      renderMain();
+
+      // 2) Optionally enhance with Groq if enabled
+      if (!GROQ_ENABLED) {
+        console.log(
+          "[Lexis] GROQ_ENABLED = false → using local materials only"
+        );
+        return;
+      }
+
+      console.log("[Lexis] Calling Groq for enhanced materials…");
       const ai = await callGroqForLessonArtifacts(text);
 
-      lesson.notes = ai.notes || localNotes;
-      lesson.summary = ai.summary || localSummary;
-      lesson.mindmap = ai.mindmap || localMindmap;
-      lesson.quiz =
-        Array.isArray(ai.quiz) && ai.quiz.length > 0 ? ai.quiz : localQuiz;
-      lesson.flashcards =
-        Array.isArray(ai.flashcards) && ai.flashcards.length > 0
-          ? ai.flashcards
-          : localFlashcards;
+      if (ai.notes) lesson.notes = ai.notes;
+      if (ai.summary) lesson.summary = ai.summary;
+      if (ai.mindmap) lesson.mindmap = ai.mindmap;
+      if (Array.isArray(ai.quiz) && ai.quiz.length > 0) {
+        lesson.quiz = ai.quiz;
+      }
+      if (Array.isArray(ai.flashcards) && ai.flashcards.length > 0) {
+        lesson.flashcards = ai.flashcards;
+      }
+
+      console.log("[Lexis] Groq enhancement applied.");
     } catch (err) {
-      console.error("Groq generation failed, using local only:", err);
-      alert(
-        "Groq call failed (see console). Using only basic local notes/summary for now."
-      );
+      console.error("Error generating lesson artifacts:", err);
+      if (GROQ_ENABLED) {
+        alert(
+          "Groq call failed (see console). Using locally generated materials only."
+        );
+      }
     } finally {
       isProcessing = false;
       saveLessons();
@@ -693,7 +704,6 @@ Transcript:
     `;
   }
 
-  // --------- NEW INTERACTIVE QUIZ RENDERER ----------
   function renderQuiz(quiz) {
     if (!quiz || quiz.length === 0) {
       return `
@@ -718,13 +728,13 @@ Transcript:
         return -1;
       const answer = String(q.answer).trim();
 
-      // Case 1: answer is like "A"/"B"/"C"/"D"
+      // Case 1: answer like "A"/"B"/"C"/"D"
       if (/^[A-D]$/i.test(answer)) {
         const idx = answer.toUpperCase().charCodeAt(0) - 65;
         return idx >= 0 && idx < q.options.length ? idx : -1;
       }
 
-      // Case 2: answer is (close to) the option text
+      // Case 2: answer is close to option text
       const ansNorm = norm(answer);
       let idx = q.options.findIndex((opt) => norm(opt) === ansNorm);
       if (idx !== -1) return idx;
@@ -785,9 +795,9 @@ Transcript:
                     ${
                       selectedIndex === correctIndex
                         ? "Correct."
-                        : `Incorrect. Correct answer: ${
+                        : \`Incorrect. Correct answer: \${
                             q.options?.[correctIndex] || q.answer
-                          }`
+                          }\`
                     }
                   </div>
                 `
@@ -1132,7 +1142,6 @@ Transcript:
     renderChatBubble();
   }
 
-  // ---------- NEW: handle quiz option clicks ----------
   function handleQuizOptionClick(el) {
     const questionIndex = Number(el.getAttribute("data-question-index"));
     const optionIndex = Number(el.getAttribute("data-option-index"));
@@ -1207,7 +1216,6 @@ Transcript:
         return;
       }
 
-      // NEW: quiz option click handler
       const quizOptionEl = e.target.closest("[data-quiz-option]");
       if (quizOptionEl) {
         handleQuizOptionClick(quizOptionEl);
@@ -1258,6 +1266,15 @@ Transcript:
       }
     });
   }
+
+  // =========================
+  //  DEBUG HELPER
+  // =========================
+
+  window.lexisGetLesson = function () {
+    const lesson = getCurrentLesson();
+    return lesson ? JSON.parse(JSON.stringify(lesson)) : null;
+  };
 
   // =========================
   //  INIT
