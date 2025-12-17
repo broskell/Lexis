@@ -27,10 +27,17 @@
 
   const STORAGE_KEY = "lexis_lessons_v1";
 
-  // ============ GROQ CONFIG ============
-  // Put your valid Groq key + model here
-  const GROQ_API_KEY = ""; 
-  const GROQ_MODEL = "llama-3.1-8b-instant"; // or any current Groq chat model
+  // =========================
+  //  GROQ CONFIG
+  // =========================
+  // Loaded from config.local.js in local dev.
+  // In production (Vercel) this object doesn't exist, so Groq is disabled.
+  const GROQ_API_KEY =
+    (window.LEXIS_GROQ_CONFIG && window.LEXIS_GROQ_CONFIG.apiKey) || "";
+  const GROQ_MODEL =
+    (window.LEXIS_GROQ_CONFIG && window.LEXIS_GROQ_CONFIG.model) ||
+    "llama-3.1-8b-instant";
+
   const GROQ_ENABLED =
     !!GROQ_API_KEY && !GROQ_API_KEY.startsWith("YOUR_") && !!GROQ_MODEL;
 
