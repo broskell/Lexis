@@ -457,7 +457,13 @@ This project is licensed under the **MIT License** – see the [LICENSE](LICENSE
       </a><br />
       <sub>Lead Developer</sub>
     </td>
-    <!-- Add more team members here -->
+    <td align="center">
+      <a href="https://github.com/shivakumar-dev-11">
+        <img src="https://github.com/shivakumar-dev-11" width="100px;" alt=""/><br />
+        <sub><b>Shiva</b></sub>
+      </a><br />
+      <sub>Login Page Developer</sub>
+    </td>
   </tr>
 </table>
 
