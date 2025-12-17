@@ -28,20 +28,8 @@
 
   const STORAGE_KEY = "lexis_lessons_v1";
 
-  // =========================
-  //  GROQ CONFIG
-  // =========================
-  // In local dev, config.local.js can define:
-  // window.LEXIS_GROQ_CONFIG = { apiKey: "...", model: "..." }
-  const GROQ_API_KEY =
-    (window.LEXIS_GROQ_CONFIG && window.LEXIS_GROQ_CONFIG.apiKey) || "";
-  const GROQ_MODEL =
-    (window.LEXIS_GROQ_CONFIG && window.LEXIS_GROQ_CONFIG.model) ||
-    "llama-3.1-8b-instant";
-
-  const GROQ_ENABLED =
-    !!GROQ_API_KEY && !GROQ_API_KEY.startsWith("YOUR_") && !!GROQ_MODEL;
-
+  // We always *try* to use the backend; errors are caught and we fall back.
+  const GROQ_ENABLED = true;
   let isChatOpen = false;
 
   // =========================
@@ -138,28 +126,23 @@
     });
   }
 
-  // Improved splitter: works for speech text without punctuation
+  // Improved splitter: supports speech text without punctuation
   function splitIntoSentences(text) {
     const cleaned = text.replace(/\s+/g, " ").trim();
     if (!cleaned) return [];
 
-    // First try punctuation-based splitting
     const byPunc = cleaned
       .split(/(?<=[.!?])\s+/)
       .map((s) => s.trim())
       .filter(Boolean);
-
     if (byPunc.length > 1) return byPunc;
 
-    // Fallback: break into ~20-word chunks
     const words = cleaned.split(/\s+/);
     const sentences = [];
     const chunkSize = 20;
-
     for (let i = 0; i < words.length; i += chunkSize) {
       sentences.push(words.slice(i, i + chunkSize).join(" "));
     }
-
     return sentences;
   }
 
@@ -217,7 +200,6 @@
     return sentences.map((s) => "- " + s).join("\n");
   }
 
-  // Better summary: simple extractive summarizer
   function generateSummaryFromTranscript(text) {
     const sentences = splitIntoSentences(text);
     if (!sentences.length) return "";
@@ -226,7 +208,6 @@
       return sentences.map((s) => "- " + s).join("\n");
     }
 
-    // Build global word frequencies
     const freqs = {};
     sentences.forEach((s) => {
       s.toLowerCase()
@@ -258,7 +239,6 @@
       idx,
       score: scoreSentence(s),
     }));
-
     scored.sort((a, b) => b.score - a.score);
     const TOP = Math.min(5, scored.length);
     const selected = scored.slice(0, TOP).sort((a, b) => a.idx - b.idx);
@@ -299,7 +279,6 @@
     return { topic, children };
   }
 
-  // Improved MCQ quiz generator
   function generateQuizFromTranscript(text) {
     const sentences = splitIntoSentences(text).filter(
       (s) => s.split(/\s+/).length >= 6
@@ -346,7 +325,6 @@
         "_____"
       );
 
-      // Build distractors from other keywords
       const distractorsPool = keywords.filter(
         (k) => k.toLowerCase() !== lowerKw
       );
@@ -366,14 +344,13 @@
           questionSentence +
           '"',
         options,
-        answer: correct, // our renderer can infer correct option from text
+        answer: correct,
       });
     }
 
     return quiz;
   }
 
-  // Better flashcards (snippet around keyword, not entire transcript)
   function generateFlashcardsFromTranscript(text) {
     const sentences = splitIntoSentences(text);
     const keywords = extractKeywords(text, 6);
@@ -406,149 +383,56 @@
   }
 
   // =========================
-  //  GROQ CALLS (optional)
+  //  GROQ BACKEND CALLS
   // =========================
 
   async function callGroqForLessonArtifacts(transcript) {
-    if (!GROQ_ENABLED) {
-      throw new Error("Groq is not configured");
-    }
-
-    const prompt = `
-You are an AI study assistant. Given a lecture transcript, create helpful study materials.
-
-Return ONLY a valid JSON object, no explanations, no markdown, no extra text.
-The JSON MUST have exactly this structure:
-
-{
-  "notes": "string (markdown-style bullet notes, short and clear)",
-  "summary": "string (3-8 bullet points, concise)",
-  "mindmap": {
-    "topic": "string (main topic of the lecture)",
-    "children": [
-      { "topic": "subtopic 1", "children": [] },
-      { "topic": "subtopic 2", "children": [] }
-    ]
-  },
-  "quiz": [
-    {
-      "question": "string (MCQ or short question)",
-      "options": ["A", "B", "C", "D"],
-      "answer": "string (one of the options or short answer)"
-    }
-  ],
-  "flashcards": [
-    { "front": "Term or question", "back": "Explanation or answer" }
-  ]
-}
-
-Transcript:
-"""${transcript}"""`;
-
-    const res = await fetch(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + GROQ_API_KEY,
-        },
-        body: JSON.stringify({
-          model: GROQ_MODEL,
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are a strict JSON generator for study materials. You never include markdown code fences.",
-            },
-            { role: "user", content: prompt },
-          ],
-          temperature: 0.2,
-        }),
-      }
-    );
+    const res = await fetch("/api/lexis", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "artifacts", transcript }),
+    });
 
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
-      throw new Error("Groq HTTP " + res.status + ": " + txt);
+      throw new Error("Backend HTTP " + res.status + ": " + txt);
     }
 
     const data = await res.json();
-    const content = data.choices?.[0]?.message?.content || "";
-
-    let jsonText = content.trim();
-    const fenceMatch = jsonText.match(/\{[\s\S]*\}/);
-    if (fenceMatch) jsonText = fenceMatch[0];
-
-    let parsed;
-    try {
-      parsed = JSON.parse(jsonText);
-    } catch (err) {
-      console.error("Failed to parse Groq JSON:", jsonText);
-      throw err;
+    if (!data || !data.success || !data.artifacts) {
+      throw new Error("Invalid artifacts response from backend");
     }
-    return parsed;
+    return data.artifacts;
   }
 
-  // Chat-specific Groq call
   async function callGroqForChat(question, lesson) {
-    if (!GROQ_ENABLED) {
-      throw new Error("Groq is not configured");
-    }
-
     const contextParts = [];
     if (lesson.notes) contextParts.push("NOTES:\n" + lesson.notes);
     if (lesson.summary) contextParts.push("SUMMARY:\n" + lesson.summary);
-    if (lesson.transcript) contextParts.push("TRANSCRIPT:\n" + lesson.transcript);
+    if (lesson.transcript)
+      contextParts.push("TRANSCRIPT:\n" + lesson.transcript);
 
     let context = contextParts.join("\n\n");
-    // Limit context length for safety
-    if (context.length > 6000) {
-      context = context.slice(context.length - 6000);
+    if (context.length > 8000) {
+      context = context.slice(context.length - 8000);
     }
 
-    const userPrompt = `
-You are Lexis, an AI study assistant. Answer the student's question **only** using the lesson context below. 
-If the answer is not clearly supported by the context, say you are not sure and explain what *is* in the notes instead.
-Keep answers short and focused (2–5 sentences).
-
-Lesson context:
-"""${context}"""
-
-Student question:
-"""${question}"""`;
-
-    const res = await fetch(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + GROQ_API_KEY,
-        },
-        body: JSON.stringify({
-          model: GROQ_MODEL,
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are Lexis, a helpful and concise AI study assistant for a single lesson.",
-            },
-            { role: "user", content: userPrompt },
-          ],
-          temperature: 0.3,
-        }),
-      }
-    );
+    const res = await fetch("/api/lexis", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "chat", question, context }),
+    });
 
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
-      throw new Error("Groq HTTP " + res.status + ": " + txt);
+      throw new Error("Backend HTTP " + res.status + ": " + txt);
     }
 
     const data = await res.json();
-    const content = data.choices?.[0]?.message?.content || "";
-    return content.trim();
+    if (!data || !data.success || typeof data.answer !== "string") {
+      throw new Error("Invalid chat response from backend");
+    }
+    return data.answer;
   }
 
   // =========================
@@ -760,7 +644,6 @@ Student question:
         text.length
       );
 
-      // 1) ALWAYS generate local artifacts first
       const localNotes = generateNotesFromTranscript(text);
       const localSummary = generateSummaryFromTranscript(text);
       const localMindmap = generateMindmapFromTranscript(text);
@@ -776,15 +659,14 @@ Student question:
       saveLessons();
       renderMain();
 
-      // 2) Optionally enhance with Groq if enabled
       if (!GROQ_ENABLED) {
         console.log(
-          "[Lexis] GROQ_ENABLED = false → using local materials only"
+          "[Lexis] GROQ_ENABLED is false → using local materials only"
         );
         return;
       }
 
-      console.log("[Lexis] Calling Groq for enhanced materials…");
+      console.log("[Lexis] Calling backend for enhanced materials…");
       const ai = await callGroqForLessonArtifacts(text);
 
       if (ai.notes) lesson.notes = ai.notes;
@@ -797,12 +679,12 @@ Student question:
         lesson.flashcards = ai.flashcards;
       }
 
-      console.log("[Lexis] Groq enhancement applied.");
+      console.log("[Lexis] Backend enhancement applied.");
     } catch (err) {
       console.error("Error generating lesson artifacts:", err);
       if (GROQ_ENABLED) {
         alert(
-          "Groq call failed (see console). Using locally generated materials only."
+          "AI generation failed (see console). Using locally generated materials only."
         );
       }
     } finally {
@@ -890,7 +772,6 @@ Student question:
     `;
   }
 
-  // ------- QUIZ RENDERING (interactive MCQ) -------
   function renderQuiz(quiz) {
     if (!quiz || quiz.length === 0) {
       return `
@@ -915,18 +796,15 @@ Student question:
         return -1;
       const answer = String(q.answer).trim();
 
-      // answer as "A"/"B"/"C"/"D"
       if (/^[A-D]$/i.test(answer)) {
         const idx = answer.toUpperCase().charCodeAt(0) - 65;
         return idx >= 0 && idx < q.options.length ? idx : -1;
       }
 
-      // answer as option text
       const ansNorm = norm(answer);
       let idx = q.options.findIndex((opt) => norm(opt) === ansNorm);
       if (idx !== -1) return idx;
 
-      // substring fallback
       idx = q.options.findIndex((opt) => {
         const on = norm(opt);
         return on.includes(ansNorm) || ansNorm.includes(on);
@@ -1296,7 +1174,6 @@ Student question:
     }
   }
 
-  // --------- CHAT SEND (with Groq when available) ----------
   async function sendChat() {
     const lesson = getCurrentLesson();
     if (!lesson) return;
@@ -1307,7 +1184,6 @@ Student question:
     const text = input.value.trim();
     if (!text) return;
 
-    // 1) Add user message
     lesson.messages.push({
       id: `${lesson.id}-u-${Date.now()}`,
       role: "user",
@@ -1319,7 +1195,6 @@ Student question:
     saveLessons();
     renderChatBubble();
 
-    // If Groq is disabled, use simple canned responses like before
     if (!GROQ_ENABLED) {
       const responses = [
         "Great question! Based on the lesson, the key is understanding how the concepts connect with each other.",
@@ -1343,7 +1218,6 @@ Student question:
       return;
     }
 
-    // 2) With Groq: show temporary "Thinking..." message
     const tempId = `${lesson.id}-a-${Date.now()}`;
     lesson.messages.push({
       id: tempId,
@@ -1363,7 +1237,7 @@ Student question:
           "I'm not completely sure how to answer that based on this lesson, but you can review the notes and summary above.";
       }
     } catch (err) {
-      console.error("Groq chat error:", err);
+      console.error("AI chat error:", err);
       const msg = lesson.messages.find((m) => m.id === tempId);
       if (msg) {
         msg.text =
