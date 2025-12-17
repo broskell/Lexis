@@ -109,17 +109,19 @@ Firebase-powered authentication ensures your data is protected:
 
 ### Login Page
 Beautiful, animated login experience with Google Sign-In integration.
-![Lexis Logo](/Assets/login-page.png)
+![Login Page](/Assets/login-page.png)
 
 ### Main Dashboard
 Clean, modern interface with sidebar navigation and tabbed content panels.
+![Main Dashboard](/Assets/main_dashboard.png)
 
 ### Mindmap View
 Visual representation of lecture concepts in an interactive format.
+![Mindmap](/Assets/mindmap.png)
 
 ### Chat Interface
 Floating chat bubble for quick questions and AI assistance.
-
+![Chat Interface](/Assets/chat_interface.png)
 ---
 
 ## 🛠️ Tech Stack
@@ -150,7 +152,11 @@ Lexis/
 │   └── script.js           # Firebase Auth logic
 │
 ├── Assets/
+│   └── chat_interface.png # Chat Interface
 │   └── lexis-html-logo.png # Application logo
+│   └── login-page.png # Login Page
+│   └── main_dashboard.png # Main Dashboard
+│   └── mindmap.png # Mindmap
 │
 └── README.md               # Documentation
 ```
@@ -501,7 +507,7 @@ Built with inspiration from:
 
 **[⬆ back to top](#-lexis--ai-study-assistant)**
 
-Made with ❤️ by the Lexis Team | © 2024 Lexis AI Study Assistant
+Made with ❤️ by the Lexis Team | © 2025 Lexis AI Study Assistant
 
 [Website](https://lexis-phi.vercel.app/) • [GitHub](https://github.com/broskell/Lexis) • [Issues](https://github.com/broskell/Lexis/issues)
 
