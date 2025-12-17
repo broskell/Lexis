@@ -138,30 +138,30 @@
     });
   }
 
+  // Improved splitter: works for speech text without punctuation
   function splitIntoSentences(text) {
-  const cleaned = text.replace(/\s+/g, " ").trim();
-  if (!cleaned) return [];
+    const cleaned = text.replace(/\s+/g, " ").trim();
+    if (!cleaned) return [];
 
-  // First try normal punctuation-based splitting
-  const byPunc = cleaned
-    .split(/(?<=[.!?])\s+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+    // First try punctuation-based splitting
+    const byPunc = cleaned
+      .split(/(?<=[.!?])\s+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
 
-  if (byPunc.length > 1) return byPunc;
+    if (byPunc.length > 1) return byPunc;
 
-  // Fallback for speech-like text with no punctuation:
-  // break into chunks of ~20 words
-  const words = cleaned.split(/\s+/);
-  const sentences = [];
-  const chunkSize = 20;
+    // Fallback: break into ~20-word chunks
+    const words = cleaned.split(/\s+/);
+    const sentences = [];
+    const chunkSize = 20;
 
-  for (let i = 0; i < words.length; i += chunkSize) {
-    sentences.push(words.slice(i, i + chunkSize).join(" "));
+    for (let i = 0; i < words.length; i += chunkSize) {
+      sentences.push(words.slice(i, i + chunkSize).join(" "));
+    }
+
+    return sentences;
   }
-
-  return sentences;
-}
 
   const STOPWORDS = new Set([
     "the",
@@ -217,10 +217,53 @@
     return sentences.map((s) => "- " + s).join("\n");
   }
 
+  // Better summary: simple extractive summarizer
   function generateSummaryFromTranscript(text) {
     const sentences = splitIntoSentences(text);
-    const chosen = sentences.slice(0, 5);
-    return chosen.map((s) => "- " + s).join("\n");
+    if (!sentences.length) return "";
+
+    if (sentences.length <= 4) {
+      return sentences.map((s) => "- " + s).join("\n");
+    }
+
+    // Build global word frequencies
+    const freqs = {};
+    sentences.forEach((s) => {
+      s.toLowerCase()
+        .replace(/[^a-z0-9\s]/g, " ")
+        .split(/\s+/)
+        .forEach((w) => {
+          if (w.length < 4 || STOPWORDS.has(w)) return;
+          freqs[w] = (freqs[w] || 0) + 1;
+        });
+    });
+
+    function scoreSentence(s) {
+      const words = s
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, " ")
+        .split(/\s+/);
+      let score = 0;
+      let count = 0;
+      words.forEach((w) => {
+        if (w.length < 4 || STOPWORDS.has(w)) return;
+        score += freqs[w] || 0;
+        count++;
+      });
+      return count ? score / count : 0;
+    }
+
+    const scored = sentences.map((s, idx) => ({
+      s,
+      idx,
+      score: scoreSentence(s),
+    }));
+
+    scored.sort((a, b) => b.score - a.score);
+    const TOP = Math.min(5, scored.length);
+    const selected = scored.slice(0, TOP).sort((a, b) => a.idx - b.idx);
+
+    return selected.map((x) => "- " + x.s).join("\n");
   }
 
   function extractKeywords(text, max = 6) {
@@ -256,49 +299,114 @@
     return { topic, children };
   }
 
+  // Improved MCQ quiz generator
   function generateQuizFromTranscript(text) {
     const sentences = splitIntoSentences(text).filter(
-      (s) => s.split(/\s+/).length >= 5
+      (s) => s.split(/\s+/).length >= 6
     );
+    if (!sentences.length) return [];
+
+    const keywords = extractKeywords(text, 12);
+    if (!keywords.length) return [];
+
     const quiz = [];
+    const usedSentences = new Set();
 
-    for (let i = 0; i < sentences.length && quiz.length < 4; i++) {
-      const words = sentences[i].split(/\s+/);
-      const candidates = words.filter((w) => w.length >= 5);
-      if (!candidates.length) continue;
+    function randomChoice(arr) {
+      return arr[Math.floor(Math.random() * arr.length)];
+    }
 
-      const word =
-        candidates[Math.floor(Math.random() * candidates.length)];
-      const cleanWord = word.replace(/[^a-zA-Z0-9]/g, "");
-      if (!cleanWord) continue;
+    function shuffle(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
 
-      const question = sentences[i].replace(word, "_____");
+    for (const kw of keywords) {
+      if (quiz.length >= 5) break;
+
+      const lowerKw = kw.toLowerCase();
+      const candidateSentence = sentences.find((s) => {
+        const key = s.toLowerCase();
+        return (
+          key.includes(lowerKw) &&
+          !usedSentences.has(s) &&
+          s.length > 20 &&
+          s.length < 240
+        );
+      });
+
+      if (!candidateSentence) continue;
+      usedSentences.add(candidateSentence);
+
+      const questionSentence = candidateSentence.replace(
+        new RegExp(kw, "i"),
+        "_____"
+      );
+
+      // Build distractors from other keywords
+      const distractorsPool = keywords.filter(
+        (k) => k.toLowerCase() !== lowerKw
+      );
+      const distractors = [];
+      while (distractors.length < 3 && distractorsPool.length > 0) {
+        const d = randomChoice(distractorsPool);
+        if (!distractors.includes(d)) distractors.push(d);
+      }
+      if (distractors.length < 3) continue;
+
+      const correct = kw;
+      const options = shuffle([correct, ...distractors]);
+
       quiz.push({
-        question: "Fill in the blank: " + question,
-        answer: cleanWord,
+        question:
+          'Which term best completes the sentence: "' +
+          questionSentence +
+          '"',
+        options,
+        answer: correct, // our renderer can infer correct option from text
       });
     }
 
     return quiz;
   }
 
+  // Better flashcards (snippet around keyword, not entire transcript)
   function generateFlashcardsFromTranscript(text) {
     const sentences = splitIntoSentences(text);
     const keywords = extractKeywords(text, 6);
     const flashcards = [];
 
     for (const kw of keywords) {
-      const sentence =
+      let sentence =
         sentences.find((s) =>
           s.toLowerCase().includes(kw.toLowerCase())
         ) || "Appears in the lesson transcript.";
+
+      if (sentence.length > 220) {
+        const lower = sentence.toLowerCase();
+        const idx = lower.indexOf(kw.toLowerCase());
+        if (idx !== -1) {
+          const start = Math.max(0, idx - 80);
+          const end = Math.min(sentence.length, idx + 140);
+          const prefix = start > 0 ? "…" : "";
+          const suffix = end < sentence.length ? "…" : "";
+          sentence = prefix + sentence.slice(start, end).trim() + suffix;
+        } else {
+          sentence = sentence.slice(0, 200).trim() + "…";
+        }
+      }
+
       flashcards.push({ front: kw, back: sentence });
     }
+
     return flashcards;
   }
 
   // =========================
-  //  GROQ CALL
+  //  GROQ CALLS (optional)
   // =========================
 
   async function callGroqForLessonArtifacts(transcript) {
@@ -380,6 +488,67 @@ Transcript:
       throw err;
     }
     return parsed;
+  }
+
+  // Chat-specific Groq call
+  async function callGroqForChat(question, lesson) {
+    if (!GROQ_ENABLED) {
+      throw new Error("Groq is not configured");
+    }
+
+    const contextParts = [];
+    if (lesson.notes) contextParts.push("NOTES:\n" + lesson.notes);
+    if (lesson.summary) contextParts.push("SUMMARY:\n" + lesson.summary);
+    if (lesson.transcript) contextParts.push("TRANSCRIPT:\n" + lesson.transcript);
+
+    let context = contextParts.join("\n\n");
+    // Limit context length for safety
+    if (context.length > 6000) {
+      context = context.slice(context.length - 6000);
+    }
+
+    const userPrompt = `
+You are Lexis, an AI study assistant. Answer the student's question **only** using the lesson context below. 
+If the answer is not clearly supported by the context, say you are not sure and explain what *is* in the notes instead.
+Keep answers short and focused (2–5 sentences).
+
+Lesson context:
+"""${context}"""
+
+Student question:
+"""${question}"""`;
+
+    const res = await fetch(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + GROQ_API_KEY,
+        },
+        body: JSON.stringify({
+          model: GROQ_MODEL,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are Lexis, a helpful and concise AI study assistant for a single lesson.",
+            },
+            { role: "user", content: userPrompt },
+          ],
+          temperature: 0.3,
+        }),
+      }
+    );
+
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      throw new Error("Groq HTTP " + res.status + ": " + txt);
+    }
+
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content || "";
+    return content.trim();
   }
 
   // =========================
@@ -721,7 +890,7 @@ Transcript:
     `;
   }
 
-  // ------- QUIZ RENDERING (interactive) -------
+  // ------- QUIZ RENDERING (interactive MCQ) -------
   function renderQuiz(quiz) {
     if (!quiz || quiz.length === 0) {
       return `
@@ -1127,7 +1296,8 @@ Transcript:
     }
   }
 
-  function sendChat() {
+  // --------- CHAT SEND (with Groq when available) ----------
+  async function sendChat() {
     const lesson = getCurrentLesson();
     if (!lesson) return;
 
@@ -1137,6 +1307,7 @@ Transcript:
     const text = input.value.trim();
     if (!text) return;
 
+    // 1) Add user message
     lesson.messages.push({
       id: `${lesson.id}-u-${Date.now()}`,
       role: "user",
@@ -1144,29 +1315,65 @@ Transcript:
       read: true,
     });
 
-    const responses = [
-      "Great question! Based on the lesson, the key is understanding how the concepts connect with each other.",
-      "Nice thought! Try linking this back to the main principles discussed earlier in the lecture.",
-      "Excellent! This directly relates to the core ideas we just captured in your notes.",
-      "Good point. Think about how this example fits into the overall structure of the lesson.",
-      "Interesting! Let me help you understand that better based on what we covered.",
-    ];
-
-    setTimeout(() => {
-      lesson.messages.push({
-        id: `${lesson.id}-a-${Date.now()}`,
-        role: "assistant",
-        text: responses[Math.floor(Math.random() * responses.length)],
-        read: isChatOpen,
-      });
-      saveLessons();
-      renderChatBubble();
-      updateChatBadge();
-    }, 500);
-
     input.value = "";
     saveLessons();
     renderChatBubble();
+
+    // If Groq is disabled, use simple canned responses like before
+    if (!GROQ_ENABLED) {
+      const responses = [
+        "Great question! Based on the lesson, the key is understanding how the concepts connect with each other.",
+        "Nice thought! Try linking this back to the main principles discussed earlier in the lecture.",
+        "Excellent! This directly relates to the core ideas we just captured in your notes.",
+        "Good point. Think about how this example fits into the overall structure of the lesson.",
+        "Interesting! Let me help you understand that better based on what we covered.",
+      ];
+
+      setTimeout(() => {
+        lesson.messages.push({
+          id: `${lesson.id}-a-${Date.now()}`,
+          role: "assistant",
+          text: responses[Math.floor(Math.random() * responses.length)],
+          read: isChatOpen,
+        });
+        saveLessons();
+        renderChatBubble();
+        updateChatBadge();
+      }, 400);
+      return;
+    }
+
+    // 2) With Groq: show temporary "Thinking..." message
+    const tempId = `${lesson.id}-a-${Date.now()}`;
+    lesson.messages.push({
+      id: tempId,
+      role: "assistant",
+      text: "Thinking about this lesson…",
+      read: isChatOpen,
+    });
+    saveLessons();
+    renderChatBubble();
+
+    try {
+      const answer = await callGroqForChat(text, lesson);
+      const msg = lesson.messages.find((m) => m.id === tempId);
+      if (msg) {
+        msg.text =
+          answer ||
+          "I'm not completely sure how to answer that based on this lesson, but you can review the notes and summary above.";
+      }
+    } catch (err) {
+      console.error("Groq chat error:", err);
+      const msg = lesson.messages.find((m) => m.id === tempId);
+      if (msg) {
+        msg.text =
+          "I had trouble contacting the AI service. You can still use the notes, summary, and flashcards above.";
+      }
+    } finally {
+      saveLessons();
+      renderChatBubble();
+      updateChatBadge();
+    }
   }
 
   function handleQuizOptionClick(el) {
