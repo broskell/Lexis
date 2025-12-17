@@ -704,6 +704,7 @@ Transcript:
     `;
   }
 
+  // ------- QUIZ RENDERING (interactive) -------
   function renderQuiz(quiz) {
     if (!quiz || quiz.length === 0) {
       return `
@@ -728,17 +729,18 @@ Transcript:
         return -1;
       const answer = String(q.answer).trim();
 
-      // Case 1: answer like "A"/"B"/"C"/"D"
+      // answer as "A"/"B"/"C"/"D"
       if (/^[A-D]$/i.test(answer)) {
         const idx = answer.toUpperCase().charCodeAt(0) - 65;
         return idx >= 0 && idx < q.options.length ? idx : -1;
       }
 
-      // Case 2: answer is close to option text
+      // answer as option text
       const ansNorm = norm(answer);
       let idx = q.options.findIndex((opt) => norm(opt) === ansNorm);
       if (idx !== -1) return idx;
 
+      // substring fallback
       idx = q.options.findIndex((opt) => {
         const on = norm(opt);
         return on.includes(ansNorm) || ansNorm.includes(on);
@@ -786,22 +788,30 @@ Transcript:
               })
               .join("");
 
-            const feedbackHtml =
-              answered && correctIndex !== -1
-                ? `
-                  <div class="quiz-feedback ${
-                    selectedIndex === correctIndex ? "correct" : "incorrect"
-                  }">
-                    ${
-                      selectedIndex === correctIndex
-                        ? "Correct."
-                        : \`Incorrect. Correct answer: \${
-                            q.options?.[correctIndex] || q.answer
-                          }\`
-                    }
-                  </div>
-                `
-                : "";
+            let feedbackText = "";
+            if (answered && correctIndex !== -1) {
+              if (selectedIndex === correctIndex) {
+                feedbackText = "Correct.";
+              } else {
+                const correctText =
+                  q.options && q.options[correctIndex]
+                    ? q.options[correctIndex]
+                    : q.answer;
+                feedbackText = "Incorrect. Correct answer: " + correctText;
+              }
+            }
+
+            let feedbackHtml = "";
+            if (feedbackText) {
+              const feedbackClass =
+                selectedIndex === correctIndex ? "correct" : "incorrect";
+              feedbackHtml =
+                '<div class="quiz-feedback ' +
+                feedbackClass +
+                '">' +
+                feedbackText +
+                "</div>";
+            }
 
             return `
               <div class="quiz-card">
