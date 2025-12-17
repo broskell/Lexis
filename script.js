@@ -139,12 +139,29 @@
   }
 
   function splitIntoSentences(text) {
-    return text
-      .replace(/\s+/g, " ")
-      .split(/(?<=[.!?])\s+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  if (!cleaned) return [];
+
+  // First try normal punctuation-based splitting
+  const byPunc = cleaned
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (byPunc.length > 1) return byPunc;
+
+  // Fallback for speech-like text with no punctuation:
+  // break into chunks of ~20 words
+  const words = cleaned.split(/\s+/);
+  const sentences = [];
+  const chunkSize = 20;
+
+  for (let i = 0; i < words.length; i += chunkSize) {
+    sentences.push(words.slice(i, i + chunkSize).join(" "));
   }
+
+  return sentences;
+}
 
   const STOPWORDS = new Set([
     "the",
