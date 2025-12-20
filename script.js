@@ -387,23 +387,50 @@
 
   // ===== SHARE HELPERS =====
 
-  function buildShareText(lesson) {
-    const title = lesson.title || "Untitled lesson";
-    const summary = (lesson.summary || "").trim();
-    const notes = (lesson.notes || "").trim();
-
-    let text = `Lesson: ${title}\n`;
-    text += `Date: ${formatDate(lesson.createdAt)}\n\n`;
-
-    if (summary) {
-      text += "Summary:\n" + summary + "\n\n";
-    }
-    if (notes) {
-      text += "Notes:\n" + notes + "\n\n";
-    }
-
-    return text.trim();
+  function normalizeField(field) {
+  if (typeof field === "string") {
+    return field.trim();
   }
+  if (Array.isArray(field)) {
+    return field.join("\n").trim();
+  }
+  if (field && typeof field === "object") {
+    // If Groq gives a structured object/JSON, stringify it
+    try {
+      return JSON.stringify(field, null, 2).trim();
+    } catch {
+      return String(field);
+    }
+  }
+  if (field == null) return "";
+  return String(field).trim();
+}
+
+function buildShareText(lesson) {
+  const title =
+    typeof lesson.title === "string" && lesson.title.trim()
+      ? lesson.title.trim()
+      : "Untitled lesson";
+
+  const summary = normalizeField(lesson.summary);
+  const notes = normalizeField(lesson.notes);
+
+  let text = `Lesson: ${title}\n`;
+  if (lesson.createdAt) {
+    text += `Date: ${formatDate(lesson.createdAt)}\n\n`;
+  } else {
+    text += "\n";
+  }
+
+  if (summary) {
+    text += "Summary:\n" + summary + "\n\n";
+  }
+  if (notes) {
+    text += "Notes:\n" + notes + "\n\n";
+  }
+
+  return text.trim();
+}
 
   async function shareCurrentLesson() {
     const lesson = getCurrentLesson();
