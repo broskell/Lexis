@@ -1271,6 +1271,18 @@ body {
   border-color: var(--red-500);
 }
 
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* ==================== RESPONSIVE ==================== */
 
 @media (max-width: 900px) {

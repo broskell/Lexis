@@ -28,7 +28,7 @@
 
   const STORAGE_KEY = "lexis_lessons_v1";
 
-  // We always *try* to use the backend; errors are caught and we fall back.
+  // We always try to use the backend; errors are caught and we fall back.
   const GROQ_ENABLED = true;
   let isChatOpen = false;
 
@@ -126,7 +126,6 @@
     });
   }
 
-  // Improved splitter: supports speech text without punctuation
   function splitIntoSentences(text) {
     const cleaned = text.replace(/\s+/g, " ").trim();
     if (!cleaned) return [];
@@ -539,7 +538,8 @@
   }
 
   let selectedLessonId = lessons[0]?.id || null;
-  let activeTab = "notes";
+  // DEFAULT TAB: Transcript
+  let activeTab = "transcript";
   let isRecording = false;
   let isProcessing = false;
   let liveUpdateTimeout = null;
@@ -608,7 +608,7 @@
   async function startRecording() {
     if (!SpeechRecognition) {
       alert(
-        "Your browser does not support SpeechRecognition.\nUse Chrome or Edge, or type/paste transcript manually in the Transcript tab."
+        "Your browser does not support SpeechRecognition.\nUse Chrome or Edge, or paste your transcript in the Transcript tab."
       );
       return;
     }
@@ -1009,6 +1009,7 @@
     let panelContent = "";
     let panelTitle = "";
     let panelIcon = "";
+    let panelActionsHtml = ""; // actions in panel header
 
     if (activeTab === "notes") {
       panelTitle = "Notes";
@@ -1033,18 +1034,19 @@
     } else if (activeTab === "transcript") {
       panelTitle = "Transcript";
       panelIcon = icons["file-text"];
+
+      panelActionsHtml = `
+        <button class="generate-btn" data-action="generate-from-text">
+          Generate from this transcript
+        </button>
+      `;
+
       panelContent = `
         <textarea
           class="textarea"
           data-field="transcript"
           placeholder="Speak using Start recording, or paste/type your transcript here. Then click Generate to create notes, summary, mindmap, quiz & flashcards."
         >${lesson.transcript || ""}</textarea>
-
-        <div class="generate-actions">
-          <button class="generate-btn" data-action="generate-from-text">
-            Generate from this transcript
-          </button>
-        </div>
       `;
     } else if (activeTab === "mindmap") {
       panelTitle = "Mindmap";
@@ -1111,6 +1113,9 @@
           <div class="panel-title">
             <span class="panel-icon">${panelIcon}</span>
             ${panelTitle}
+          </div>
+          <div class="panel-actions">
+            ${panelActionsHtml}
           </div>
         </div>
         <div class="panel-body">
@@ -1187,7 +1192,7 @@
     };
     lessons.unshift(newLesson);
     selectedLessonId = id;
-    activeTab = "notes";
+    activeTab = "transcript"; // new lesson opens on Transcript
     renderApp();
   }
 
@@ -1201,8 +1206,12 @@
     if (!confirmed) return;
 
     lessons = lessons.filter((l) => l.id !== lesson.id);
-    if (lessons.length > 0) selectedLessonId = lessons[0].id;
-    else selectedLessonId = null;
+    if (lessons.length > 0) {
+      selectedLessonId = lessons[0].id;
+      activeTab = "transcript";
+    } else {
+      selectedLessonId = null;
+    }
 
     saveLessons();
     renderApp();
@@ -1367,7 +1376,7 @@
       const item = e.target.closest(".lesson-item");
       if (!item) return;
       selectedLessonId = item.getAttribute("data-id");
-      activeTab = "notes";
+      activeTab = "transcript"; // when switching lessons, open on Transcript
       renderApp();
     });
   }
