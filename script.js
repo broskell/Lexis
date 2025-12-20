@@ -28,8 +28,12 @@
 
   const STORAGE_KEY = "lexis_lessons_v1";
 
-  // We always try to use the backend; errors are caught and we fall back.
-  const GROQ_ENABLED = true;
+  // Enable Groq backend only when NOT running on localhost
+  const IS_LOCAL =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1";
+  const GROQ_ENABLED = !IS_LOCAL;
+
   let isChatOpen = false;
 
   // =========================
@@ -406,8 +410,10 @@
     if (!lesson) return;
 
     const text = buildShareText(lesson);
+    console.log("[Lexis] Share invoked. Text length:", text.length);
 
-    if (navigator.share) {
+    // 1) Native share (mostly mobile)
+    if (navigator.share && window.isSecureContext) {
       try {
         await navigator.share({
           title: lesson.title || "Lexis lesson",
@@ -419,15 +425,29 @@
       }
     }
 
+    // 2) Clipboard API
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        alert(
+          "Lesson summary and notes copied to clipboard. You can paste and share them anywhere."
+        );
+        return;
+      } catch (err) {
+        console.error("Clipboard copy failed:", err);
+      }
+    }
+
+    // 3) Fallback: show prompt so user can copy manually
     try {
-      await navigator.clipboard.writeText(text);
-      alert(
-        "Lesson notes copied to clipboard. You can paste and share them anywhere."
+      window.prompt(
+        "Your browser doesn't support direct sharing here. Copy the text below:",
+        text
       );
     } catch (err) {
-      console.error("Clipboard copy failed:", err);
+      console.error("Prompt share fallback failed:", err);
       alert(
-        "Could not copy to clipboard. You can still copy from the Notes tab manually."
+        "Sharing is not fully supported in this browser. You can still copy notes manually from the Notes tab."
       );
     }
   }
@@ -538,8 +558,7 @@
   }
 
   let selectedLessonId = lessons[0]?.id || null;
-  // DEFAULT TAB: Transcript
-  let activeTab = "transcript";
+  let activeTab = "transcript"; // default tab
   let isRecording = false;
   let isProcessing = false;
   let liveUpdateTimeout = null;
@@ -1009,7 +1028,7 @@
     let panelContent = "";
     let panelTitle = "";
     let panelIcon = "";
-    let panelActionsHtml = ""; // actions in panel header
+    let panelActionsHtml = "";
 
     if (activeTab === "notes") {
       panelTitle = "Notes";
@@ -1034,13 +1053,11 @@
     } else if (activeTab === "transcript") {
       panelTitle = "Transcript";
       panelIcon = icons["file-text"];
-
       panelActionsHtml = `
         <button class="generate-btn" data-action="generate-from-text">
           Generate from this transcript
         </button>
       `;
-
       panelContent = `
         <textarea
           class="textarea"
@@ -1192,7 +1209,7 @@
     };
     lessons.unshift(newLesson);
     selectedLessonId = id;
-    activeTab = "transcript"; // new lesson opens on Transcript
+    activeTab = "transcript";
     renderApp();
   }
 
@@ -1376,7 +1393,7 @@
       const item = e.target.closest(".lesson-item");
       if (!item) return;
       selectedLessonId = item.getAttribute("data-id");
-      activeTab = "transcript"; // when switching lessons, open on Transcript
+      activeTab = "transcript";
       renderApp();
     });
   }
