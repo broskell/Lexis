@@ -382,6 +382,57 @@
     return flashcards;
   }
 
+  // ===== SHARE HELPERS =====
+
+  function buildShareText(lesson) {
+    const title = lesson.title || "Untitled lesson";
+    const summary = (lesson.summary || "").trim();
+    const notes = (lesson.notes || "").trim();
+
+    let text = `Lesson: ${title}\n`;
+    text += `Date: ${formatDate(lesson.createdAt)}\n\n`;
+
+    if (summary) {
+      text += "Summary:\n" + summary + "\n\n";
+    }
+    if (notes) {
+      text += "Notes:\n" + notes + "\n\n";
+    }
+
+    return text.trim();
+  }
+
+  async function shareCurrentLesson() {
+    const lesson = getCurrentLesson();
+    if (!lesson) return;
+
+    const text = buildShareText(lesson);
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: lesson.title || "Lexis lesson",
+          text,
+        });
+        return;
+      } catch (err) {
+        console.log("navigator.share error:", err);
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      alert(
+        "Lesson notes copied to clipboard. You can paste and share them anywhere."
+      );
+    } catch (err) {
+      console.error("Clipboard copy failed:", err);
+      alert(
+        "Could not copy to clipboard. You can still copy from the Notes tab manually."
+      );
+    }
+  }
+
   // =========================
   //  GROQ BACKEND CALLS
   // =========================
@@ -986,8 +1037,14 @@
         <textarea
           class="textarea"
           data-field="transcript"
-          placeholder="Speak using Start recording, or paste/type your transcript here. Then stop recording to generate notes."
+          placeholder="Speak using Start recording, or paste/type your transcript here. Then click Generate to create notes, summary, mindmap, quiz & flashcards."
         >${lesson.transcript || ""}</textarea>
+
+        <div class="generate-actions">
+          <button class="generate-btn" data-action="generate-from-text">
+            Generate from this transcript
+          </button>
+        </div>
       `;
     } else if (activeTab === "mindmap") {
       panelTitle = "Mindmap";
@@ -1038,6 +1095,7 @@
         </div>
         <div class="record-controls">
           ${recordBtnHtml}
+          <button class="share-btn" data-action="share-lesson">Share</button>
           <button class="delete-btn" data-action="delete-lesson">Delete</button>
         </div>
       </div>
@@ -1338,6 +1396,17 @@
       else if (action === "stop-recording") stopRecording();
       else if (action === "new-lesson") handleNewLesson();
       else if (action === "delete-lesson") deleteCurrentLesson();
+      else if (action === "generate-from-text") {
+        isProcessing = true;
+        renderMain();
+        generateArtifactsForCurrentLesson().catch((err) => {
+          console.error(err);
+          isProcessing = false;
+          renderMain();
+        });
+      } else if (action === "share-lesson") {
+        shareCurrentLesson();
+      }
     });
 
     mainInner.addEventListener("input", (e) => {

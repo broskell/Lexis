@@ -1230,6 +1230,47 @@ body {
   color: var(--red-400);
 }
 
+.generate-actions {
+  margin-top: 16px;
+}
+
+.generate-btn {
+  padding: 10px 16px;
+  border-radius: 9999px;
+  border: 1px solid var(--black-600);
+  background: var(--black-800);
+  color: var(--text-200);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-out);
+}
+
+.generate-btn:hover {
+  background: var(--black-700);
+  border-color: var(--red-500);
+  color: var(--text-100);
+}
+
+.share-btn {
+  padding: 8px 12px;
+  border-radius: 9999px;
+  border: 1px solid var(--black-600);
+  background: transparent;
+  color: var(--text-400);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-left: 4px;
+  transition: all 0.2s var(--ease-out);
+}
+
+.share-btn:hover {
+  background: var(--black-700);
+  color: var(--red-300);
+  border-color: var(--red-500);
+}
+
 /* ==================== RESPONSIVE ==================== */
 
 @media (max-width: 900px) {
