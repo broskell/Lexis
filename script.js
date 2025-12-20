@@ -388,49 +388,48 @@
   // ===== SHARE HELPERS =====
 
   function normalizeField(field) {
-  if (typeof field === "string") {
-    return field.trim();
-  }
-  if (Array.isArray(field)) {
-    return field.join("\n").trim();
-  }
-  if (field && typeof field === "object") {
-    // If Groq gives a structured object/JSON, stringify it
-    try {
-      return JSON.stringify(field, null, 2).trim();
-    } catch {
-      return String(field);
+    if (typeof field === "string") {
+      return field.trim();
     }
-  }
-  if (field == null) return "";
-  return String(field).trim();
-}
-
-function buildShareText(lesson) {
-  const title =
-    typeof lesson.title === "string" && lesson.title.trim()
-      ? lesson.title.trim()
-      : "Untitled lesson";
-
-  const summary = normalizeField(lesson.summary);
-  const notes = normalizeField(lesson.notes);
-
-  let text = `Lesson: ${title}\n`;
-  if (lesson.createdAt) {
-    text += `Date: ${formatDate(lesson.createdAt)}\n\n`;
-  } else {
-    text += "\n";
+    if (Array.isArray(field)) {
+      return field.join("\n").trim();
+    }
+    if (field && typeof field === "object") {
+      try {
+        return JSON.stringify(field, null, 2).trim();
+      } catch {
+        return String(field);
+      }
+    }
+    if (field == null) return "";
+    return String(field).trim();
   }
 
-  if (summary) {
-    text += "Summary:\n" + summary + "\n\n";
-  }
-  if (notes) {
-    text += "Notes:\n" + notes + "\n\n";
-  }
+  function buildShareText(lesson) {
+    const title =
+      typeof lesson.title === "string" && lesson.title.trim()
+        ? lesson.title.trim()
+        : "Untitled lesson";
 
-  return text.trim();
-}
+    const summary = normalizeField(lesson.summary);
+    const notes = normalizeField(lesson.notes);
+
+    let text = `Lesson: ${title}\n`;
+    if (lesson.createdAt) {
+      text += `Date: ${formatDate(lesson.createdAt)}\n\n`;
+    } else {
+      text += "\n";
+    }
+
+    if (summary) {
+      text += "Summary:\n" + summary + "\n\n";
+    }
+    if (notes) {
+      text += "Notes:\n" + notes + "\n\n";
+    }
+
+    return text.trim();
+  }
 
   async function shareCurrentLesson() {
     const lesson = getCurrentLesson();
@@ -465,7 +464,7 @@ function buildShareText(lesson) {
       }
     }
 
-    // 3) Fallback: show prompt so user can copy manually
+    // 3) Fallback: prompt for manual copy
     try {
       window.prompt(
         "Your browser doesn't support direct sharing here. Copy the text below:",
@@ -589,6 +588,7 @@ function buildShareText(lesson) {
   let isRecording = false;
   let isProcessing = false;
   let liveUpdateTimeout = null;
+  let stopRequestedByUser = false; // NEW: track who stopped recording
 
   // =========================
   //  SPEECH RECOGNITION
@@ -666,6 +666,7 @@ function buildShareText(lesson) {
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = "en-US";
+    stopRequestedByUser = false;
 
     recognition.onresult = (event) => {
       let text = "";
@@ -693,9 +694,21 @@ function buildShareText(lesson) {
     };
 
     recognition.onend = () => {
+      const currentLesson = getCurrentLesson();
+      const hasTranscript =
+        currentLesson && (currentLesson.transcript || "").trim().length > 0;
+
+      // If it stopped but user didn't press Stop, show a notification
+      if (!stopRequestedByUser && hasTranscript) {
+        alert(
+          "Recording stopped automatically. This can happen due to long silence or browser limits.\nI'll process what was captured so far. You can press Start Recording again to continue."
+        );
+      }
+
       if (isRecording) {
         isRecording = false;
       }
+
       isProcessing = true;
       renderMain();
       generateArtifactsForCurrentLesson().catch((err) => {
@@ -713,6 +726,7 @@ function buildShareText(lesson) {
 
   function stopRecording() {
     if (recognition) {
+      stopRequestedByUser = true;
       recognition.stop();
     }
   }
