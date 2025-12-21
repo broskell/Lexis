@@ -18,11 +18,24 @@
               <span class="logo-badge">STUDY</span>
             </div>
             <div class="logo-desc">
-              AI study assistant for your lectures – notes, mindmaps, quizzes & more.
+              AI study assistant for your lectures – notes, mindmaps, quizzes &amp; more.
             </div>
+          </div>
+          <br>
+          <!-- Language selector -->
+          <div class="language-selector">
+            <label for="languageSelect">Language</label>
+            <select id="languageSelect">
+              <option value="en-US">English</option>
+              <option value="hi-IN">Hindi</option>
+              <option value="te-IN">Telugu</option>
+              <option value="es-ES">Spanish</option>
+              <option value="mixed">Mixed / Auto</option>
+            </select>
           </div>
         </div>
 
+        <!-- New lesson button -->
         <button id="newLessonBtn" class="new-lesson-btn">
           <span>＋</span>
           <span>New Live Lesson</span>
@@ -40,6 +53,18 @@
           <div class="storage-info">
             Local storage · lessons autosaved on this device
           </div>
+        </div>
+
+        <!-- Discord-style user bar -->
+        <div class="user-bar">
+          <div class="user-info">
+            <img id="userAvatar" class="user-avatar" src="" alt="User avatar" />
+            <div class="user-text">
+              <div id="userName" class="user-name">Lexis user</div>
+              <div id="userEmail" class="user-email"></div>
+            </div>
+          </div>
+          <button id="logoutBtn" class="user-logout-btn">Log out</button>
         </div>
       </aside>
 
@@ -94,8 +119,9 @@
         </div>
       </div>
     </div>
-  <!-- This may 404 on Vercel, that's OK; it's only for local dev -->
-  <script src="config.local.js"></script>
-  <script src="script.js"></script>
+
+    <!-- Optional local config; safe to 404 on Vercel -->
+    <!-- <script src="config.local.js"></script> -->
+    <script src="script.js"></script>
   </body>
 </html>

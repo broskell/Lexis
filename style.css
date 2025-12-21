@@ -1283,6 +1283,110 @@ body {
   gap: 8px;
 }
 
+/* Discord-style user bar at bottom of sidebar */
+.user-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: var(--space-3);
+  border-top: 1px solid var(--black-700);
+  background: var(--black-850);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 9999px;
+  object-fit: cover;
+  background: var(--black-700);
+}
+
+.user-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.user-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-200);
+}
+
+.user-email {
+  font-size: 11px;
+  color: var(--text-500);
+}
+
+.user-logout-btn {
+  padding: 6px 10px;
+  border-radius: 9999px;
+  border: 1px solid var(--black-600);
+  background: transparent;
+  color: var(--text-400);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s var(--ease-out);
+}
+
+.user-logout-btn:hover {
+  background: var(--black-700);
+  color: var(--red-300);
+  border-color: var(--red-500);
+}
+
+.language-selector {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.language-selector label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-500);
+  white-space: nowrap;
+}
+
+#languageSelect {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 8px;
+  height: 26px;
+  border-radius: 9999px;
+  border: 1px solid var(--black-700);
+  background: var(--black-800);
+  color: var(--text-300);
+  font-size: 11px;
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.15s var(--ease-out);
+}
+
+#languageSelect:hover {
+  border-color: var(--black-500);
+  background: var(--black-700);
+}
+
+#languageSelect:focus {
+  border-color: var(--red-500);
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.3);
+}
+
 /* ==================== RESPONSIVE ==================== */
 
 @media (max-width: 900px) {

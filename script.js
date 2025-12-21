@@ -1,13 +1,15 @@
 (function () {
   // =========================
-  //  SIMPLE AUTH GUARD
+  //  SIMPLE AUTH GUARD + USER
   // =========================
+  let currentUser = null;
   try {
     const rawUser = localStorage.getItem("lexis_user");
     if (!rawUser) {
       window.location.replace("/login/");
       return;
     }
+    currentUser = JSON.parse(rawUser);
   } catch (err) {
     window.location.replace("/login/");
     return;
@@ -27,6 +29,13 @@
   ];
 
   const STORAGE_KEY = "lexis_lessons_v1";
+
+  // Language preference
+  const LANGUAGE_STORAGE_KEY = "lexis_language";
+  const DEFAULT_LANGUAGE = "en-US";
+  // Special pseudo-code: "mixed" → let browser default decide
+  let currentLanguageCode =
+    localStorage.getItem(LANGUAGE_STORAGE_KEY) || DEFAULT_LANGUAGE;
 
   // Enable Groq backend only when NOT running on localhost
   const IS_LOCAL =
@@ -437,7 +446,6 @@
 
     const text = buildShareText(lesson);
 
-    // 1) Native share (mobile)
     if (navigator.share && window.isSecureContext) {
       try {
         await navigator.share({
@@ -450,7 +458,6 @@
       }
     }
 
-    // 2) Clipboard
     if (navigator.clipboard && window.isSecureContext) {
       try {
         await navigator.clipboard.writeText(text);
@@ -463,7 +470,6 @@
       }
     }
 
-    // 3) Fallback: prompt for manual copy
     try {
       window.prompt(
         "Your browser doesn't support direct sharing here. Copy the text below:",
@@ -582,13 +588,78 @@
     }
   }
 
+  // =========================
+  //  USER BAR (AVATAR, NAME, LOGOUT)
+  // =========================
+
+  function initUserBar() {
+    const avatarEl = document.getElementById("userAvatar");
+    const nameEl = document.getElementById("userName");
+    const emailEl = document.getElementById("userEmail");
+    if (!avatarEl || !nameEl || !emailEl) return;
+
+    if (!currentUser) {
+      nameEl.textContent = "Lexis user";
+      emailEl.textContent = "";
+      avatarEl.src = "";
+      return;
+    }
+
+    nameEl.textContent = currentUser.displayName || "Lexis user";
+    emailEl.textContent = currentUser.email || "";
+
+    if (currentUser.photoURL) {
+      avatarEl.src = currentUser.photoURL;
+    } else {
+      avatarEl.src = "/Assets/default-avatar.png";
+    }
+  }
+
+  function handleLogout() {
+    localStorage.removeItem("lexis_user");
+    window.location.replace("/login/");
+  }
+
+  // =========================
+  //  LANGUAGE SELECTOR
+  // =========================
+
+  function getRecognitionLang(code) {
+    // "mixed" → let browser default decide (empty string)
+    if (!code || code === "mixed") return "";
+    return code;
+  }
+
+  function initLanguageSelector() {
+    const select = document.getElementById("languageSelect");
+    if (!select) return;
+
+    // If currentLanguageCode isn't one of the options, fall back
+    const validValues = Array.from(select.options).map((o) => o.value);
+    if (!validValues.includes(currentLanguageCode)) {
+      currentLanguageCode = DEFAULT_LANGUAGE;
+    }
+
+    select.value = currentLanguageCode;
+
+    select.addEventListener("change", () => {
+      currentLanguageCode = select.value || DEFAULT_LANGUAGE;
+      localStorage.setItem(LANGUAGE_STORAGE_KEY, currentLanguageCode);
+      console.log("[Lexis] Language set to", currentLanguageCode);
+    });
+  }
+
+  // =========================
+  //  STATE VARS
+  // =========================
+
   let selectedLessonId = lessons[0]?.id || null;
-  let activeTab = "transcript"; // default tab
+  let activeTab = "transcript";
   let isRecording = false;
   let isProcessing = false;
   let liveUpdateTimeout = null;
   let stopRequestedByUser = false;
-  let baseTranscript = ""; // transcript before current recording session
+  let baseTranscript = "";
 
   // =========================
   //  SPEECH RECOGNITION
@@ -623,8 +694,6 @@
       badgeEl.classList.remove("visible");
     }
   }
-
-  // --- LIVE UPDATE HELPERS ---
 
   function scheduleLiveUpdate() {
     if (liveUpdateTimeout) clearTimeout(liveUpdateTimeout);
@@ -665,10 +734,11 @@
     recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = "en-US";
-    stopRequestedByUser = false;
+    // Use selected language; "mixed" → "" → browser default
+    recognition.lang =
+      getRecognitionLang(currentLanguageCode) || DEFAULT_LANGUAGE;
 
-    // Start from whatever transcript already exists
+    stopRequestedByUser = false;
     baseTranscript = lesson.transcript || "";
 
     recognition.onresult = (event) => {
@@ -697,7 +767,7 @@
     };
 
     recognition.onend = () => {
-      // If user didn't explicitly stop, auto-restart to keep mic "always on"
+      // Auto-restart if the user didn't explicitly stop
       if (!stopRequestedByUser && isRecording) {
         baseTranscript = getCurrentLesson()?.transcript || "";
         setTimeout(() => {
@@ -710,7 +780,7 @@
         return;
       }
 
-      // User pressed Stop: finish up and generate materials
+      // User pressed Stop: finish
       isRecording = false;
       stopRequestedByUser = false;
       isProcessing = true;
@@ -1222,6 +1292,7 @@
     renderMain();
     renderChatBubble();
     updateChatBadge();
+    initUserBar();
     saveLessons();
   }
 
@@ -1515,6 +1586,9 @@
     });
   }
 
+  const logoutBtn = document.getElementById("logoutBtn");
+  if (logoutBtn) logoutBtn.addEventListener("click", handleLogout);
+
   // =========================
   //  DEBUG HELPER
   // =========================
@@ -1528,5 +1602,6 @@
   //  INIT
   // =========================
 
+  initLanguageSelector();
   renderApp();
 })();
