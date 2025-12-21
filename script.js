@@ -294,7 +294,7 @@
     const quiz = [];
     const usedSentences = new Set();
 
-    function randomChoice(arr) {
+  function randomChoice(arr) {
       return arr[Math.floor(Math.random() * arr.length)];
     }
 
@@ -588,7 +588,7 @@
   let isRecording = false;
   let isProcessing = false;
   let liveUpdateTimeout = null;
-  let stopRequestedByUser = false; // NEW: track who stopped recording
+  let stopRequestedByUser = false; // track who stopped recording
 
   // =========================
   //  SPEECH RECOGNITION
@@ -694,21 +694,22 @@
     };
 
     recognition.onend = () => {
-      const currentLesson = getCurrentLesson();
-      const hasTranscript =
-        currentLesson && (currentLesson.transcript || "").trim().length > 0;
-
-      // If it stopped but user didn't press Stop, show a notification
-      if (!stopRequestedByUser && hasTranscript) {
-        alert(
-          "Recording stopped automatically. This can happen due to long silence or browser limits.\nI'll process what was captured so far. You can press Start Recording again to continue."
+      // If the user didn't explicitly stop, auto-restart
+      if (!stopRequestedByUser && isRecording) {
+        console.log(
+          "[Lexis] Speech recognition ended by browser, restarting…"
         );
+        try {
+          recognition.start();
+        } catch (err) {
+          console.error("Error restarting recognition:", err);
+        }
+        return;
       }
 
-      if (isRecording) {
-        isRecording = false;
-      }
-
+      // Otherwise, process as a completed recording
+      isRecording = false;
+      stopRequestedByUser = false;
       isProcessing = true;
       renderMain();
       generateArtifactsForCurrentLesson().catch((err) => {
@@ -945,7 +946,7 @@
                     : "",
                 ]
                   .filter(Boolean)
-                  .join(" ");
+                  .join("");
 
                 return `
                   <div
