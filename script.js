@@ -6,7 +6,7 @@
     const rawUser = localStorage.getItem("lexis_user");
     if (!rawUser) {
       window.location.replace("/login/");
-      return; // stop running dashboard JS
+      return;
     }
   } catch (err) {
     window.location.replace("/login/");
@@ -294,7 +294,7 @@
     const quiz = [];
     const usedSentences = new Set();
 
-  function randomChoice(arr) {
+    function randomChoice(arr) {
       return arr[Math.floor(Math.random() * arr.length)];
     }
 
@@ -436,9 +436,8 @@
     if (!lesson) return;
 
     const text = buildShareText(lesson);
-    console.log("[Lexis] Share invoked. Text length:", text.length);
 
-    // 1) Native share (mostly mobile)
+    // 1) Native share (mobile)
     if (navigator.share && window.isSecureContext) {
       try {
         await navigator.share({
@@ -451,7 +450,7 @@
       }
     }
 
-    // 2) Clipboard API
+    // 2) Clipboard
     if (navigator.clipboard && window.isSecureContext) {
       try {
         await navigator.clipboard.writeText(text);
@@ -588,7 +587,8 @@
   let isRecording = false;
   let isProcessing = false;
   let liveUpdateTimeout = null;
-  let stopRequestedByUser = false; // track who stopped recording
+  let stopRequestedByUser = false;
+  let baseTranscript = ""; // transcript before current recording session
 
   // =========================
   //  SPEECH RECOGNITION
@@ -668,12 +668,15 @@
     recognition.lang = "en-US";
     stopRequestedByUser = false;
 
+    // Start from whatever transcript already exists
+    baseTranscript = lesson.transcript || "";
+
     recognition.onresult = (event) => {
-      let text = "";
+      let sessionText = "";
       for (let i = 0; i < event.results.length; i++) {
-        text += event.results[i][0].transcript + " ";
+        sessionText += event.results[i][0].transcript + " ";
       }
-      lesson.transcript = text.trim();
+      lesson.transcript = (baseTranscript + " " + sessionText).trim();
       saveLessons();
 
       scheduleLiveUpdate();
@@ -694,20 +697,20 @@
     };
 
     recognition.onend = () => {
-      // If the user didn't explicitly stop, auto-restart
+      // If user didn't explicitly stop, auto-restart to keep mic "always on"
       if (!stopRequestedByUser && isRecording) {
-        console.log(
-          "[Lexis] Speech recognition ended by browser, restarting…"
-        );
-        try {
-          recognition.start();
-        } catch (err) {
-          console.error("Error restarting recognition:", err);
-        }
+        baseTranscript = getCurrentLesson()?.transcript || "";
+        setTimeout(() => {
+          try {
+            recognition.start();
+          } catch (err) {
+            console.error("Error restarting recognition:", err);
+          }
+        }, 200);
         return;
       }
 
-      // Otherwise, process as a completed recording
+      // User pressed Stop: finish up and generate materials
       isRecording = false;
       stopRequestedByUser = false;
       isProcessing = true;
